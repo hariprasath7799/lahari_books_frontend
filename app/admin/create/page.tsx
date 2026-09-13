@@ -5,11 +5,27 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { ToastContainer, ToastItem } from '@/components/Toast';
 import { ArrowLeft, Upload, Image as ImageIcon, X, Check, Loader2 } from 'lucide-react';
 
 export default function CreateBookPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  // Toast Notification System
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success', title?: string) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type, title }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Form Fields State
   const [title, setTitle] = useState('');
@@ -59,10 +75,13 @@ export default function CreateBookPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['books'] });
-      router.push('/admin');
+      addToast('Book published successfully!', 'success');
+      setTimeout(() => {
+        router.push('/admin');
+      }, 700);
     },
     onError: (error: any) => {
-      alert(error?.response?.data?.message || 'Failed to create book. Please check server logs.');
+      addToast(error?.response?.data?.message || 'Failed to create book. Please try again.', 'error');
     },
   });
 
@@ -70,7 +89,7 @@ export default function CreateBookPage() {
     e.preventDefault();
 
     if (!title.trim() || !author.trim() || !publishingYear) {
-      alert('Please fill out all required fields.');
+      addToast('Please fill out all required fields.', 'error');
       return;
     }
 
@@ -87,7 +106,9 @@ export default function CreateBookPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/60 p-4 md:p-8 lg:p-12">
+    <div className="min-h-screen bg-slate-50/60 p-4 md:p-8 lg:p-12 relative">
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+
       <div className="max-w-3xl mx-auto space-y-6">
         
         {/* Navigation & Header */}

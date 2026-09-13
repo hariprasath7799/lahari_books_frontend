@@ -32,6 +32,7 @@ interface RichTextEditorProps {
     onChange: (content: string) => void;
     placeholder?: string;
     minHeight?: string;
+    maxHeight?: string;
 }
 
 export default function RichTextEditor({
@@ -39,6 +40,7 @@ export default function RichTextEditor({
     onChange,
     placeholder = 'Paste or type book text here...',
     minHeight = '320px',
+    maxHeight = '550px',
 }: RichTextEditorProps) {
     const editor = useEditor({
         extensions: [
@@ -106,9 +108,9 @@ export default function RichTextEditor({
     );
 
     return (
-        <div className="w-full border border-gray-300 dark:border-slate-700 rounded-xl overflow-hidden shadow-inner bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all">
-            {/* Top Formatting Toolbar */}
-            <div className="flex flex-wrap items-center gap-0.5 p-2 bg-gray-50 dark:bg-slate-800/80 border-b border-gray-200 dark:border-slate-700 sticky top-0 z-10 select-none">
+        <div className="flex flex-col w-full border border-gray-300 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm bg-white dark:bg-slate-900 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all">
+            {/* Sticky/Fixed Top Formatting Toolbar */}
+            <div className="sticky top-0 z-20 flex flex-wrap items-center gap-0.5 p-2.5 bg-gray-50/95 dark:bg-slate-800/95 backdrop-blur-md border-b border-gray-200 dark:border-slate-700 select-none flex-shrink-0 shadow-xs">
                 {/* Text Formatting */}
                 <div className="flex items-center gap-0.5">
                     <ToolbarButton
@@ -263,12 +265,14 @@ export default function RichTextEditor({
                 </div>
             </div>
 
-            {/* Editable Content Area */}
-            <div className="p-5 text-gray-800 dark:text-gray-100 text-lg leading-relaxed cursor-text">
+            {/* Scrollable Editable Content Area */}
+            <div 
+                className="p-5 text-gray-800 dark:text-gray-100 text-lg leading-relaxed cursor-text overflow-y-auto flex-1"
+                style={{ minHeight, maxHeight: maxHeight || '550px' }}
+            >
                 <EditorContent
                     editor={editor}
-                    style={{ minHeight }}
-                    className="prose max-w-none focus:outline-none"
+                    className="prose max-w-none focus:outline-none min-h-full"
                 />
             </div>
         </div>
