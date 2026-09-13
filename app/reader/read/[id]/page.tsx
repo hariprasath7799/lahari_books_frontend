@@ -114,6 +114,49 @@ export default function ReaderPage() {
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
     const [speechRate, setSpeechRate] = useState<number>(0.9);
+    const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+
+    // Helper to split long text into small chunks (< 180 chars) for Mobile SpeechSynthesis compatibility
+    const splitTextIntoChunks = (text: string, maxChunkLen: number = 180): string[] => {
+        const cleaned = text.replace(/\s+/g, ' ').trim();
+        if (!cleaned) return [];
+
+        const rawSentences = cleaned.match(/[^.!?\n|।]+[.!?\n|.]?/g) || [cleaned];
+        const chunks: string[] = [];
+        let currentChunk = '';
+
+        for (const sentence of rawSentences) {
+            const trimmed = sentence.trim();
+            if (!trimmed) continue;
+
+            if ((currentChunk + ' ' + trimmed).length <= maxChunkLen) {
+                currentChunk = currentChunk ? `${currentChunk} ${trimmed}` : trimmed;
+            } else {
+                if (currentChunk) chunks.push(currentChunk);
+
+                if (trimmed.length > maxChunkLen) {
+                    const subParts = trimmed.match(/[^,;:]+[,;:]?/g) || [trimmed];
+                    let subChunk = '';
+                    for (const part of subParts) {
+                        const pTrimmed = part.trim();
+                        if (!pTrimmed) continue;
+                        if ((subChunk + ' ' + pTrimmed).length <= maxChunkLen) {
+                            subChunk = subChunk ? `${subChunk} ${pTrimmed}` : pTrimmed;
+                        } else {
+                            if (subChunk) chunks.push(subChunk);
+                            subChunk = pTrimmed;
+                        }
+                    }
+                    if (subChunk) chunks.push(subChunk);
+                    currentChunk = '';
+                } else {
+                    currentChunk = trimmed;
+                }
+            }
+        }
+        if (currentChunk) chunks.push(currentChunk);
+        return chunks;
+    };
 
     // 1. Voice Loading Logic (useEffect)
     useEffect(() => {
@@ -143,6 +186,7 @@ export default function ReaderPage() {
         return () => {
             if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
+                activeUtterancesRef.current = [];
                 setIsSpeaking(false);
             }
         };
@@ -153,6 +197,7 @@ export default function ReaderPage() {
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
         }
+        activeUtterancesRef.current = [];
         setIsSpeaking(false);
     };
 
@@ -162,51 +207,98 @@ export default function ReaderPage() {
 
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
+            activeUtterancesRef.current = [];
+
+            // 1. Replace block HTML tags with periods and newlines before stripping HTML
+            let formattedHtml = pageData.content
+                .replace(/<\/(p|h1|h2|h3|h4|h5|h6|li|div|blockquote)>/gi, '.\n')
+                .replace(/<br\s*\/?>/gi, '.\n');
 
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = pageData.content;
+            tempDiv.innerHTML = formattedHtml;
             const cleanTextToRead = tempDiv.textContent || tempDiv.innerText || "";
 
             if (!cleanTextToRead.trim()) return;
 
-            const utterance = new SpeechSynthesisUtterance(cleanTextToRead);
+            // 2. Split text into short chunks (< 180 characters) for mobile TTS compatibility
+            const chunks = splitTextIntoChunks(cleanTextToRead, 180);
+            if (chunks.length === 0) return;
 
-            // 1. Detect if the text contains Tamil or Telugu characters (Unicode blocks)
+            // 3. Detect language
             const isTamil = /[\u0B80-\u0BFF]/.test(cleanTextToRead);
             const isTelugu = /[\u0C00-\u0C7F]/.test(cleanTextToRead);
 
-            // 2. Automatically assign the correct language code
-            if (isTamil) {
-                utterance.lang = 'ta-IN';
-            } else if (isTelugu) {
-                utterance.lang = 'te-IN';
-            } else if (voices.length > 0) {
-                utterance.lang = voices[selectedVoiceIndex].lang;
+            let targetLang = 'en-US';
+            if (isTamil) targetLang = 'ta-IN';
+            else if (isTelugu) targetLang = 'te-IN';
+            else if (voices.length > 0 && voices[selectedVoiceIndex]) {
+                targetLang = voices[selectedVoiceIndex].lang;
             }
 
-            // 3. Only apply the selected voice if it matches the text language!
+            let matchedVoice: SpeechSynthesisVoice | undefined;
             if (voices.length > 0) {
                 const selectedVoice = voices[selectedVoiceIndex];
                 if (
-                    (isTamil && selectedVoice.lang.startsWith('ta')) ||
-                    (isTelugu && selectedVoice.lang.startsWith('te')) ||
+                    (isTamil && selectedVoice?.lang?.startsWith('ta')) ||
+                    (isTelugu && selectedVoice?.lang?.startsWith('te')) ||
                     (!isTamil && !isTelugu)
                 ) {
-                    utterance.voice = selectedVoice;
+                    matchedVoice = selectedVoice;
                 } else {
-                    const nativeVoice = voices.find(v => v.lang.startsWith(utterance.lang));
-                    if (nativeVoice) utterance.voice = nativeVoice;
+                    matchedVoice = voices.find(v => v.lang.startsWith(targetLang));
                 }
             }
 
-            utterance.rate = rateOverride ?? speechRate;
-            utterance.pitch = 1;
+            const currentRate = rateOverride ?? speechRate;
 
-            utterance.onstart = () => setIsSpeaking(true);
-            utterance.onend = () => setIsSpeaking(false);
-            utterance.onerror = () => setIsSpeaking(false);
+            // 4. Create Utterance objects for all chunks and store in Ref (prevents mobile JS Garbage Collection)
+            const utterances = chunks.map((chunkText) => {
+                const utterance = new SpeechSynthesisUtterance(chunkText);
+                utterance.lang = targetLang;
+                if (matchedVoice) {
+                    utterance.voice = matchedVoice;
+                }
+                utterance.rate = currentRate;
+                utterance.pitch = 1;
+                return utterance;
+            });
 
-            window.speechSynthesis.speak(utterance);
+            activeUtterancesRef.current = utterances;
+
+            // 5. Play chunks sequentially using onend callback (Mobile Safe)
+            const speakChunkAtIndex = (index: number) => {
+                if (index >= utterances.length) {
+                    setIsSpeaking(false);
+                    return;
+                }
+
+                const currentUtterance = utterances[index];
+
+                currentUtterance.onstart = () => {
+                    setIsSpeaking(true);
+                };
+
+                currentUtterance.onend = () => {
+                    if (index + 1 < utterances.length) {
+                        speakChunkAtIndex(index + 1);
+                    } else {
+                        setIsSpeaking(false);
+                    }
+                };
+
+                currentUtterance.onerror = (e) => {
+                    console.warn('TTS Chunk error:', e);
+                    if (index + 1 < utterances.length) {
+                        speakChunkAtIndex(index + 1);
+                    } else {
+                        setIsSpeaking(false);
+                    }
+                };
+
+                window.speechSynthesis.speak(currentUtterance);
+            };
+
+            speakChunkAtIndex(0);
         }
     };
 
