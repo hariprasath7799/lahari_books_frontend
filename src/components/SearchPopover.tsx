@@ -49,6 +49,10 @@ export interface SearchPopoverProps {
   placeholder?: string;
   /** Custom CSS class names for the top container */
   className?: string;
+  /** Display mode: 'icon' (shows search icon button, expands popover) or 'inline' (shows search bar) */
+  variant?: 'icon' | 'inline';
+  /** Border color style override for icon button */
+  borderColor?: string;
 }
 
 // ==========================================
@@ -104,6 +108,8 @@ export default function SearchPopover({
   baseRoute = '/read',
   placeholder,
   className = '',
+  variant = 'icon',
+  borderColor,
 }: SearchPopoverProps) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -124,12 +130,12 @@ export default function SearchPopover({
     };
   }, [query]);
 
-  // Open popover whenever user types valid search query
+  // Open popover when user types in inline mode
   useEffect(() => {
-    if (debouncedQuery.length > 0) {
+    if (variant === 'inline' && debouncedQuery.length > 0) {
       setIsOpen(true);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, variant]);
 
   // ------------------------------------------
   // 2. Outside Click & Escape Key Handlers
@@ -195,8 +201,15 @@ export default function SearchPopover({
   const handleClearInput = () => {
     setQuery('');
     setDebouncedQuery('');
-    setIsOpen(false);
     inputRef.current?.focus();
+  };
+
+  const togglePopover = () => {
+    const nextState = !isOpen;
+    setIsOpen(nextState);
+    if (nextState) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   };
 
   const constructSnippetUrl = (targetBookId: string, pageNumber: number) => {
@@ -215,13 +228,13 @@ export default function SearchPopover({
     }
 
     return (
-      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+      <div className="divide-y divide-gray-100 dark:divide-slate-800">
         {results.map((item) => {
           const coverUrl = getCoverImageUrl(item.book.coverImageUrl || item.book.coverImage);
           return (
             <div key={item.book._id} className="p-3">
               {/* Book Header */}
-              <div className="flex items-center gap-2.5 mb-2 pb-1.5 border-b border-gray-100 dark:border-gray-800/60">
+              <div className="flex items-center gap-2.5 mb-2 pb-1.5 border-b border-gray-100 dark:border-slate-800/60">
                 {coverUrl ? (
                   <img
                     src={coverUrl}
@@ -255,9 +268,9 @@ export default function SearchPopover({
                     key={`${item.book._id}-p${snippet.pageNumber}`}
                     href={constructSnippetUrl(item.book._id, snippet.pageNumber)}
                     onClick={handleItemClick}
-                    className="group flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors text-left text-xs"
+                    className="group flex items-start gap-2.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800/70 transition-colors text-left text-xs"
                   >
-                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 group-hover:bg-indigo-100 group-hover:text-indigo-700 dark:group-hover:bg-indigo-900/50 dark:group-hover:text-indigo-300 px-1.5 py-0.5 rounded transition-colors mt-0.5">
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-800 group-hover:bg-indigo-100 group-hover:text-indigo-700 dark:group-hover:bg-indigo-900/50 dark:group-hover:text-indigo-300 px-1.5 py-0.5 rounded transition-colors mt-0.5">
                       <FileText className="w-3 h-3" />
                       p. {snippet.pageNumber}
                     </span>
@@ -294,9 +307,9 @@ export default function SearchPopover({
             key={`p${snippet.pageNumber}`}
             href={constructSnippetUrl(currentBookId, snippet.pageNumber)}
             onClick={handleItemClick}
-            className="group flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/70 transition-colors text-left text-xs"
+            className="group flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800/70 transition-colors text-left text-xs"
           >
-            <span className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 group-hover:bg-indigo-100 group-hover:text-indigo-700 dark:group-hover:bg-indigo-900/50 dark:group-hover:text-indigo-300 px-2 py-0.5 rounded transition-colors mt-0.5">
+            <span className="flex-shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-800 group-hover:bg-indigo-100 group-hover:text-indigo-700 dark:group-hover:bg-indigo-900/50 dark:group-hover:text-indigo-300 px-2 py-0.5 rounded transition-colors mt-0.5">
               <FileText className="w-3 h-3" />
               Page {snippet.pageNumber}
             </span>
@@ -311,8 +324,8 @@ export default function SearchPopover({
   };
 
   const renderEmptyState = () => (
-    <div className="p-8 text-center">
-      <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400">
+    <div className="p-6 text-center">
+      <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400">
         <Search className="w-5 h-5" />
       </div>
       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">No results found</p>
@@ -323,7 +336,107 @@ export default function SearchPopover({
   );
 
   // ------------------------------------------
-  // Main Render
+  // Main Render - ICON TRIGGER VARIANT
+  // ------------------------------------------
+  if (variant === 'icon') {
+    return (
+      <div ref={containerRef} className={`relative ${className}`}>
+        {/* Search Icon Trigger Button */}
+        <button
+          type="button"
+          onClick={togglePopover}
+          className="px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1.5 shadow-xs flex-shrink-0"
+          style={{ borderColor: borderColor || 'currentColor' }}
+          title="Search book"
+        >
+          <Search className="w-4 h-4 opacity-80 flex-shrink-0" />
+          <span className="hidden md:inline">Search</span>
+        </button>
+
+        {/* Floating Search Popover Box */}
+        {isOpen && (
+          <>
+            {/* Mobile overlay backdrop */}
+            <div
+              className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs sm:hidden z-40"
+              onClick={() => setIsOpen(false)}
+            />
+
+            <div className="fixed left-3 right-3 top-14 sm:absolute sm:top-full sm:mt-2 sm:right-0 sm:left-auto sm:w-96 md:w-[400px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 text-gray-900 dark:text-gray-100">
+              {/* Input Header */}
+              <div className="p-2.5 border-b border-gray-100 dark:border-slate-800 flex items-center gap-2 bg-gray-50/70 dark:bg-slate-800/70">
+                <Search className="w-4 h-4 text-indigo-500 flex-shrink-0 ml-1" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={placeholder || defaultPlaceholder}
+                  className="w-full bg-transparent text-xs sm:text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none"
+                />
+                {isFetching && (
+                  <Loader2 className="w-4 h-4 text-indigo-500 animate-spin flex-shrink-0" />
+                )}
+                {query && !isFetching && (
+                  <button
+                    type="button"
+                    onClick={handleClearInput}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-md"
+                    title="Clear text"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-md hover:bg-gray-200/50 dark:hover:bg-slate-700/50"
+                  title="Close search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Loading Bar */}
+              {isFetching && (
+                <div className="h-0.5 w-full bg-indigo-100 dark:bg-indigo-950 overflow-hidden">
+                  <div className="h-full bg-indigo-500 animate-pulse w-full" />
+                </div>
+              )}
+
+              {/* Results Body */}
+              <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100 dark:divide-slate-800">
+                {!debouncedQuery ? (
+                  <div className="p-6 text-center text-xs text-gray-400 dark:text-gray-500">
+                    Type words to search inside this book...
+                  </div>
+                ) : isLoading ? (
+                  <div className="p-6 text-center text-gray-500 dark:text-gray-400 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-xs font-medium">Searching matching pages...</span>
+                  </div>
+                ) : isError ? (
+                  <div className="p-6 text-center text-red-500 text-xs">
+                    Failed to load search results. Please try again.
+                  </div>
+                ) : isGlobalSearchResponse(data) ? (
+                  renderGlobalResults(data)
+                ) : isBookSpecificSearchResponse(data) ? (
+                  renderBookSpecificResults(data)
+                ) : (
+                  renderEmptyState()
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ------------------------------------------
+  // Main Render - INLINE VARIANT
   // ------------------------------------------
   return (
     <div ref={containerRef} className={`relative w-full max-w-md ${className}`}>
@@ -341,7 +454,7 @@ export default function SearchPopover({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder || defaultPlaceholder}
-          className="w-full pl-10 pr-9 py-2 text-sm bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-900 border border-transparent focus:border-indigo-500/50 dark:focus:border-indigo-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 rounded-xl outline-none shadow-sm transition-all duration-200"
+          className="w-full pl-10 pr-9 py-2 text-sm bg-gray-100/80 dark:bg-slate-800/80 hover:bg-gray-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-transparent focus:border-indigo-500/50 dark:focus:border-indigo-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 rounded-xl outline-none shadow-sm transition-all duration-200"
         />
 
         {/* Clear Button or Spinner */}
@@ -355,31 +468,29 @@ export default function SearchPopover({
               type="button"
               onClick={handleClearInput}
               aria-label="Clear search"
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 rounded-md hover:bg-gray-200/60 dark:hover:bg-slate-700 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
 
           {!query && (
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium text-gray-400 bg-gray-200/50 dark:bg-gray-700/50 rounded border border-gray-300/40 dark:border-gray-600/40">
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium text-gray-400 bg-gray-200/50 dark:bg-slate-700/50 rounded border border-gray-300/40 dark:border-slate-600/40">
               ESC
             </kbd>
           )}
         </div>
       </div>
 
-      {/* macOS Command Palette Style Popover Dropdown */}
+      {/* Popover Dropdown */}
       {isOpen && debouncedQuery.length > 0 && (
-        <div className="absolute top-full mt-2 left-0 w-full bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-xl border border-gray-200/80 dark:border-gray-800 shadow-2xl overflow-hidden z-50 max-h-[60vh] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Subtle top indicator if fetching updated results */}
+        <div className="fixed left-3 right-3 top-16 sm:absolute sm:top-full sm:mt-2 sm:left-0 sm:right-auto sm:w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-gray-200/80 dark:border-slate-800 shadow-2xl overflow-hidden z-50 max-h-[60vh] overflow-y-auto divide-y divide-gray-100 dark:divide-slate-800 animate-in fade-in slide-in-from-top-2 duration-150 text-gray-900 dark:text-gray-100">
           {isFetching && (
             <div className="h-0.5 w-full bg-indigo-100 dark:bg-indigo-950 overflow-hidden">
               <div className="h-full bg-indigo-500 animate-pulse w-full" />
             </div>
           )}
 
-          {/* Loading Skeleton / State */}
           {isLoading ? (
             <div className="p-6 text-center text-gray-500 dark:text-gray-400 flex flex-col items-center justify-center gap-2">
               <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />

@@ -13,16 +13,16 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'Lumina Digital Library',
-    template: '%s | Lumina Library',
+    default: 'Lahari Digital Library',
+    template: '%s | Lahari Library',
   },
   description: 'Premium digital reading, book highlight catalog, and management portal',
-  applicationName: 'Lumina Library',
+  applicationName: 'Lahari Library',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Lumina Library',
+    title: 'Lahari Library',
   },
   formatDetection: {
     telephone: false,

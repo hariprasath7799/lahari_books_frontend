@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import Image from 'next/image';
+import SIX_POINTED_STAR from "@/public/six_pointed_star_sunburst.png";
 
 export const metadata = {
     title: 'Book Reader & Library Portal',
@@ -27,7 +29,7 @@ export default function Home() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                     </div>
-                    <span className="text-xl font-bold tracking-tight text-white/90">Lumina Library</span>
+                    <span className="text-xl font-bold tracking-tight text-white/90">Lahari Library</span>
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-xs font-medium text-white/80">
@@ -39,8 +41,18 @@ export default function Home() {
             {/* Main Content Area */}
             <div className="relative z-10 w-full max-w-5xl mx-auto px-6 py-12 flex-1 flex flex-col items-center justify-center text-center">
                 {/* Badge */}
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/20 border border-indigo-400/30 backdrop-blur-md mb-6">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300">Welcome to Lumina</span>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-500/20 border border-indigo-400/30 backdrop-blur-md mb-4">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-indigo-300">Welcome to Lahari</span>
+                </div>
+
+                {/* Rotating Six Pointed Star Sunburst Image */}
+                <div className="mb-6 flex justify-center items-center drop-shadow-[10px_10px_15px_rgba(194,65,12,0.85)]">
+                    <Image
+                        src={SIX_POINTED_STAR}
+                        alt="Six Pointed Star Sunburst"
+                        className="w-24 h-24 sm:w-32 sm:h-32 object-contain animate-spin-slow transform-gpu will-change-transform"
+                        style={{ animation: 'spin-slow 1s linear infinite' }}
+                    />
                 </div>
 
                 {/* Hero Title */}
@@ -60,7 +72,7 @@ export default function Home() {
                         className="group relative flex flex-col justify-between p-8 rounded-3xl bg-white/10 hover:bg-white/[0.15] border border-white/20 hover:border-indigo-400/50 backdrop-blur-xl transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-1.5 text-left"
                     >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
-                        
+
                         <div>
                             <div className="flex items-center justify-between mb-6">
                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
@@ -130,7 +142,7 @@ export default function Home() {
 
             {/* Footer */}
             <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 text-center text-xs text-slate-400">
-                Lumina Books Platform &copy; {new Date().getFullYear()} &bull; Built with Next.js &amp; Tailwind CSS
+                Lahari Books Platform &copy; {new Date().getFullYear()} &bull; Built with Next.js &amp; Tailwind CSS
             </footer>
         </main>
     );

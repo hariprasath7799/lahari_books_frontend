@@ -21,18 +21,18 @@ export default function PWAInstaller() {
         navigator.serviceWorker
           .register('/sw.js')
           .then((registration) => {
-            console.log('Lumina PWA ServiceWorker registered with scope:', registration.scope);
+            console.log('Lahari PWA ServiceWorker registered with scope:', registration.scope);
           })
           .catch((error) => {
-            console.error('Lumina PWA ServiceWorker registration failed:', error);
+            console.error('Lahari PWA ServiceWorker registration failed:', error);
           });
       });
     } else if ('serviceWorker' in navigator) {
       // Register in dev mode too for PWA testing
       navigator.serviceWorker
         .register('/sw.js')
-        .then((reg) => console.log('Lumina PWA SW Dev registered:', reg.scope))
-        .catch((err) => console.warn('Lumina PWA SW Dev registration notice:', err));
+        .then((reg) => console.log('Lahari PWA SW Dev registered:', reg.scope))
+        .catch((err) => console.warn('Lahari PWA SW Dev registration notice:', err));
     }
 
     // 2. Check if already installed / standalone
@@ -83,7 +83,7 @@ export default function PWAInstaller() {
 
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
+
     if (outcome === 'accepted') {
       setShowInstallBanner(false);
     }
@@ -102,11 +102,11 @@ export default function PWAInstaller() {
           <div className="flex items-center gap-3">
             <img
               src="/apple-touch-icon.png"
-              alt="Lumina App Icon"
+              alt="Lahari App Icon"
               className="w-12 h-12 rounded-xl border border-indigo-400/30 shadow-md object-cover"
             />
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-sm text-white truncate">Install Lumina App</h3>
+              <h3 className="font-bold text-sm text-white truncate">Install Lahari App</h3>
               <p className="text-xs text-slate-300 truncate">Fast access & offline reading catalog</p>
             </div>
             <button
@@ -166,7 +166,7 @@ export default function PWAInstaller() {
                 </button>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                To install <strong className="text-white">Lumina</strong> on your iPhone / iPad:
+                To install <strong className="text-white">Lahari</strong> on your iPhone / iPad:
               </p>
               <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
                 <li>Tap the <strong className="text-indigo-300">Share</strong> icon in Safari.</li>

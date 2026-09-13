@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Lumina Digital Library',
-    short_name: 'Lumina',
+    name: 'Lahari Digital Library',
+    short_name: 'Lahari',
     description: 'Premium book reading and administration portal',
     start_url: '/',
     display: 'standalone',

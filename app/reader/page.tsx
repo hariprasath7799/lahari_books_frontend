@@ -35,7 +35,7 @@ export default function BookLibrary() {
                         <p className="text-gray-500 mt-2 text-lg">Select a book to continue reading</p>
                     </div>
                     <div className="w-full md:w-80">
-                        <SearchPopover baseRoute="/reader/read" />
+                        <SearchPopover baseRoute="/reader/read" variant="inline" />
                     </div>
                 </header>
 

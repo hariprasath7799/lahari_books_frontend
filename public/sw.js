@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lumina-pwa-v1';
+const CACHE_NAME = 'Lahari-pwa-v1';
 const STATIC_ASSETS = [
   '/',
   '/offline',
@@ -88,7 +88,7 @@ self.addEventListener('fetch', (event) => {
             if (networkResponse && networkResponse.status === 200) {
               caches.open(CACHE_NAME).then((cache) => cache.put(request, networkResponse));
             }
-          }).catch(() => {});
+          }).catch(() => { });
           return cachedResponse;
         }
         return fetch(request).then((networkResponse) => {

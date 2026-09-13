@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector, useDispatch } from 'react-redux';
 import { toggleTheme, setFontSize, setTheme } from '@/lib/store';
 import api from '@/lib/api';
-import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame, Volume2, Square, Play } from 'lucide-react';
 import BookFrame from '@/components/BookFrame';
 import ThemeSelector, { THEME_PRESETS, ThemeConfig } from '@/components/ThemeSelector';
 import SearchPopover from '@/components/SearchPopover';
@@ -108,6 +108,121 @@ export default function ReaderPage() {
         return reduxTheme || 'light-white';
     });
     const [selectedBorderId, setSelectedBorderId] = useState<string>('royal-filigree');
+
+    // Read Aloud (Web Speech API) States
+    const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+    const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+    const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
+    const [speechRate, setSpeechRate] = useState<number>(0.9);
+
+    // 1. Voice Loading Logic (useEffect)
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+        const loadVoices = () => {
+            const availableVoices = window.speechSynthesis.getVoices();
+            const filteredVoices = availableVoices.filter(v =>
+                v.lang.startsWith('en') ||
+                v.lang.startsWith('ta') ||
+                v.lang.startsWith('hi') ||
+                v.lang.startsWith('te')
+            );
+            const voiceList = filteredVoices.length > 0 ? filteredVoices : availableVoices;
+            setVoices(voiceList);
+        };
+
+        loadVoices();
+
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+    }, []);
+
+    // 2. Speech Cleanup when navigating page number or unmounting
+    useEffect(() => {
+        return () => {
+            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                setIsSpeaking(false);
+            }
+        };
+    }, [pageNumber]);
+
+    // 3. Stop Speech Function
+    const handleStopSpeech = () => {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        setIsSpeaking(false);
+    };
+
+    // 4. Play Speech Function (Strip HTML and Speak with Selected Voice, Lang & Speed)
+    const handlePlaySpeech = (rateOverride?: number) => {
+        if (!pageData?.content) return;
+
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = pageData.content;
+            const cleanTextToRead = tempDiv.textContent || tempDiv.innerText || "";
+
+            if (!cleanTextToRead.trim()) return;
+
+            const utterance = new SpeechSynthesisUtterance(cleanTextToRead);
+
+            // 1. Detect if the text contains Tamil or Telugu characters (Unicode blocks)
+            const isTamil = /[\u0B80-\u0BFF]/.test(cleanTextToRead);
+            const isTelugu = /[\u0C00-\u0C7F]/.test(cleanTextToRead);
+
+            // 2. Automatically assign the correct language code
+            if (isTamil) {
+                utterance.lang = 'ta-IN';
+            } else if (isTelugu) {
+                utterance.lang = 'te-IN';
+            } else if (voices.length > 0) {
+                utterance.lang = voices[selectedVoiceIndex].lang;
+            }
+
+            // 3. Only apply the selected voice if it matches the text language!
+            if (voices.length > 0) {
+                const selectedVoice = voices[selectedVoiceIndex];
+                if (
+                    (isTamil && selectedVoice.lang.startsWith('ta')) ||
+                    (isTelugu && selectedVoice.lang.startsWith('te')) ||
+                    (!isTamil && !isTelugu)
+                ) {
+                    utterance.voice = selectedVoice;
+                } else {
+                    const nativeVoice = voices.find(v => v.lang.startsWith(utterance.lang));
+                    if (nativeVoice) utterance.voice = nativeVoice;
+                }
+            }
+
+            utterance.rate = rateOverride ?? speechRate;
+            utterance.pitch = 1;
+
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = () => setIsSpeaking(false);
+
+            window.speechSynthesis.speak(utterance);
+        }
+    };
+
+    // 5. Handle Live Playback Rate / Speed Changes
+    const handleRateChange = (newRate: number) => {
+        setSpeechRate(newRate);
+        if (isSpeaking || (typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
+            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            setIsSpeaking(false);
+            setTimeout(() => {
+                handlePlaySpeech(newRate);
+            }, 50);
+        }
+    };
 
     // Restore Theme & Border selection from localStorage safely on mount after hydration
     useEffect(() => {
@@ -471,7 +586,7 @@ export default function ReaderPage() {
         >
             {/* Reader Top Toolbar - Responsive for Mobile & Desktop */}
             <div
-                className="sticky top-0 z-30 px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between shadow-sm backdrop-blur-md border-b transition-colors gap-2 sm:gap-4"
+                className="sticky top-0 z-40 px-2 sm:px-6 py-1.5 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between shadow-sm backdrop-blur-md border-b transition-colors gap-1 sm:gap-3 max-w-full"
                 style={{
                     backgroundColor: activeTheme.toolbarBg,
                     borderColor: activeTheme.borderColor,
@@ -481,15 +596,21 @@ export default function ReaderPage() {
                 {/* Back to Library */}
                 <button
                     onClick={() => router.push('/')}
-                    className="text-xs sm:text-sm font-semibold hover:opacity-80 transition-opacity flex items-center gap-1 sm:gap-1.5 flex-shrink-0"
+                    className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-transparent hover:border-current/15 text-xs sm:text-sm font-semibold hover:opacity-80 transition flex items-center gap-1 flex-shrink-0"
+                    title="Back to Library"
                 >
-                    <ChevronLeft className="w-4 h-4" />
-                    <span className="hidden xs:inline">Library</span>
+                    <ChevronLeft className="w-4 h-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Library</span>
                 </button>
 
-                {/* Right Action Controls: Search, Font Controls, Border Selector, Theme Selector */}
-                <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-                    <SearchPopover bookId={bookId} baseRoute="/reader/read" className="w-40 sm:w-60" />
+                {/* Right Action Controls: Search, Font Controls, Speech Controls, Border Selector, Theme Selector */}
+                <div className="flex items-center gap-1 sm:gap-2.5 flex-wrap sm:flex-nowrap justify-end flex-1 min-w-0">
+                    <SearchPopover
+                        bookId={bookId}
+                        baseRoute="/reader/read"
+                        variant="icon"
+                        borderColor={activeTheme.borderColor}
+                    />
                     {/* Compact Segmented Font Size Pill */}
                     <div
                         className="flex items-center rounded-xl border p-0.5 shadow-xs flex-shrink-0"
@@ -497,32 +618,97 @@ export default function ReaderPage() {
                     >
                         <button
                             onClick={() => dispatch(setFontSize(Math.max(14, fontSize - 2)))}
-                            className="px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm font-bold hover:bg-current/10 transition"
+                            className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
                             title="Decrease Font Size"
                         >
                             A-
                         </button>
-                        <span className="w-[1px] h-3.5 opacity-25 bg-current" />
+                        <span className="w-[1px] h-3 opacity-25 bg-current" />
                         <button
                             onClick={() => dispatch(setFontSize(Math.min(32, fontSize + 2)))}
-                            className="px-2 py-1 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm font-bold hover:bg-current/10 transition"
+                            className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
                             title="Increase Font Size"
                         >
                             A+
                         </button>
                     </div>
 
+                    {/* Read Aloud Speech Controls: Voice Selector, Speed Selector & Play/Stop Button */}
+                    <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+                        {voices.length > 0 && (
+                            <select
+                                value={selectedVoiceIndex}
+                                onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
+                                className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs max-w-[65px] xs:max-w-[95px] sm:max-w-[150px] truncate outline-none cursor-pointer"
+                                style={{
+                                    borderColor: activeTheme.borderColor,
+                                    backgroundColor: activeTheme.toolbarBg,
+                                    color: activeTheme.textColor
+                                }}
+                                title="Select Voice"
+                            >
+                                {voices.map((voice, idx) => (
+                                    <option key={`${voice.name}-${idx}`} value={idx} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">
+                                        {voice.name.replace(/Google|Microsoft|Apple|Desktop|Natural/gi, '').trim() || voice.name} ({voice.lang})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+
+                        {/* Speech Speed / Playback Rate Selector Dropdown */}
+                        <select
+                            value={speechRate}
+                            onChange={(e) => handleRateChange(Number(e.target.value))}
+                            className="px-1 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs outline-none cursor-pointer flex-shrink-0"
+                            style={{
+                                borderColor: activeTheme.borderColor,
+                                backgroundColor: activeTheme.toolbarBg,
+                                color: activeTheme.textColor
+                            }}
+                            title="Playback Speed"
+                        >
+                            <option value={0.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.5x</option>
+                            <option value={0.75} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.75x</option>
+                            <option value={0.9} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.9x</option>
+                            <option value={1.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.0x</option>
+                            <option value={1.25} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.25x</option>
+                            <option value={1.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.5x</option>
+                            <option value={2.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">2.0x</option>
+                        </select>
+
+                        {isSpeaking ? (
+                            <button
+                                onClick={handleStopSpeech}
+                                className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-200 dark:hover:bg-red-900 transition flex items-center gap-1 shadow-xs flex-shrink-0"
+                                title="Stop Reading Aloud"
+                            >
+                                <Square className="w-3.5 h-3.5 fill-current flex-shrink-0" />
+                                <span className="hidden xs:inline">Stop</span>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => handlePlaySpeech()}
+                                className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition flex items-center gap-1 shadow-xs flex-shrink-0"
+                                style={{ borderColor: activeTheme.borderColor }}
+                                title="Read Aloud"
+                            >
+                                <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 opacity-90 flex-shrink-0" />
+                                <span className="hidden xs:inline">Listen</span>
+                            </button>
+                        )}
+                    </div>
+
                     {/* Border Design Selector Dropdown */}
                     <div className="relative" ref={borderMenuRef}>
                         <button
                             onClick={() => setIsBorderMenuOpen(!isBorderMenuOpen)}
-                            className="px-2.5 sm:px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1.5 sm:gap-2 shadow-xs flex-shrink-0"
+                            className="px-1.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1 sm:gap-2 shadow-xs flex-shrink-0"
                             style={{ borderColor: activeTheme.borderColor }}
+                            title="Border Style"
                         >
-                            <span className="text-sm sm:text-base leading-none">{activeBorder.icon}</span>
+                            <span className="text-xs sm:text-base leading-none">{activeBorder.icon}</span>
                             <span className="hidden md:inline">{activeBorder.name}</span>
-                            <span className="md:hidden text-xs">Border</span>
-                            <Frame className="w-3.5 h-3.5 opacity-70 ml-0.5 flex-shrink-0" />
+                            <Frame className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-70 flex-shrink-0" />
                         </button>
 
                         {isBorderMenuOpen && (

@@ -972,20 +972,20 @@ export default function ThemeSelector({
         <div className="relative" ref={menuRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="px-2.5 sm:px-3.5 py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1.5 sm:gap-2 shadow-xs flex-shrink-0"
+                className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1 sm:gap-1.5 shadow-xs flex-shrink-0"
                 style={{ borderColor: activeTheme.borderColor }}
+                title="Select Theme"
             >
                 <span
-                    className="w-3.5 h-3.5 rounded-full border shadow-xs flex-shrink-0"
+                    className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border shadow-xs flex-shrink-0"
                     style={{ background: activeTheme.swatchColor, borderColor: activeTheme.borderColor }}
                 />
-                <span className="hidden sm:inline">{activeTheme.name}</span>
-                <span className="sm:hidden text-xs font-semibold">{activeTheme.name.split(' ')[0]}</span>
-                <Palette className="w-3.5 h-3.5 opacity-70 ml-0.5 flex-shrink-0" />
+                <span className="hidden md:inline">{activeTheme.name}</span>
+                <Palette className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-70 flex-shrink-0" />
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 py-3 px-2 z-50 max-h-[85vh] overflow-y-auto text-gray-900 dark:text-gray-100 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-24px)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 py-3 px-2 z-50 max-h-[85vh] overflow-y-auto text-gray-900 dark:text-gray-100 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-800 mb-2">
                         <h4 className="text-xs font-bold uppercase tracking-wider opacity-60">Reader Theme & Lighting</h4>
                     </div>
