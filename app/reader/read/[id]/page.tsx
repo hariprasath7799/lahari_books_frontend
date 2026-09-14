@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector, useDispatch } from 'react-redux';
 import { toggleTheme, setFontSize, setTheme } from '@/lib/store';
 import api from '@/lib/api';
-import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame, Volume2, Square, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame, Volume2, Square, Play, SlidersHorizontal, X, Menu } from 'lucide-react';
 import BookFrame from '@/components/BookFrame';
 import ThemeSelector, { THEME_PRESETS, ThemeConfig } from '@/components/ThemeSelector';
 import SearchPopover from '@/components/SearchPopover';
@@ -108,6 +108,7 @@ export default function ReaderPage() {
         return reduxTheme || 'light-white';
     });
     const [selectedBorderId, setSelectedBorderId] = useState<string>('royal-filigree');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
     // Read Aloud (Web Speech API) States
     const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
@@ -115,6 +116,7 @@ export default function ReaderPage() {
     const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
     const [speechRate, setSpeechRate] = useState<number>(0.9);
     const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+    const speechSessionIdRef = useRef<number>(0);
 
     // Helper to split long text into small chunks (< 180 chars) for Mobile SpeechSynthesis compatibility
     const splitTextIntoChunks = (text: string, maxChunkLen: number = 180): string[] => {
@@ -181,138 +183,161 @@ export default function ReaderPage() {
         }
     }, []);
 
-    // 2. Speech Cleanup when navigating page number or unmounting
-    useEffect(() => {
-        return () => {
-            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                activeUtterancesRef.current = [];
-                setIsSpeaking(false);
-            }
-        };
-    }, [pageNumber]);
-
-    // 3. Stop Speech Function
-    const handleStopSpeech = () => {
+    // 3. Stop Speech Function (Cancels TTS and invalidates any active session)
+    const handleStopSpeech = useCallback(() => {
+        speechSessionIdRef.current += 1;
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
         }
         activeUtterancesRef.current = [];
         setIsSpeaking(false);
-    };
+    }, []);
+
+    // 2. Speech Cleanup when navigating page number or unmounting
+    useEffect(() => {
+        return () => {
+            handleStopSpeech();
+        };
+    }, [pageNumber, handleStopSpeech]);
 
     // 4. Play Speech Function (Strip HTML and Speak with Selected Voice, Lang & Speed)
     const handlePlaySpeech = (rateOverride?: number) => {
         if (!pageData?.content) return;
 
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            activeUtterancesRef.current = [];
+        // Immediately stop any existing speech session & invalidate previous session callbacks
+        handleStopSpeech();
 
-            // 1. Replace block HTML tags with periods and newlines before stripping HTML
-            let formattedHtml = pageData.content
-                .replace(/<\/(p|h1|h2|h3|h4|h5|h6|li|div|blockquote)>/gi, '.\n')
-                .replace(/<br\s*\/?>/gi, '.\n');
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = formattedHtml;
-            const cleanTextToRead = tempDiv.textContent || tempDiv.innerText || "";
+        // Capture current session ID for this playback lifecycle
+        const currentSessionId = speechSessionIdRef.current;
 
-            if (!cleanTextToRead.trim()) return;
+        // 1. Replace block HTML tags with periods and newlines before stripping HTML
+        let formattedHtml = pageData.content
+            .replace(/<\/(p|h1|h2|h3|h4|h5|h6|li|div|blockquote)>/gi, '.\n')
+            .replace(/<br\s*\/?>/gi, '.\n');
 
-            // 2. Split text into short chunks (< 180 characters) for mobile TTS compatibility
-            const chunks = splitTextIntoChunks(cleanTextToRead, 180);
-            if (chunks.length === 0) return;
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = formattedHtml;
+        const cleanTextToRead = tempDiv.textContent || tempDiv.innerText || "";
 
-            // 3. Detect language
-            const isTamil = /[\u0B80-\u0BFF]/.test(cleanTextToRead);
-            const isTelugu = /[\u0C00-\u0C7F]/.test(cleanTextToRead);
+        if (!cleanTextToRead.trim()) return;
 
-            let targetLang = 'en-US';
-            if (isTamil) targetLang = 'ta-IN';
-            else if (isTelugu) targetLang = 'te-IN';
-            else if (voices.length > 0 && voices[selectedVoiceIndex]) {
-                targetLang = voices[selectedVoiceIndex].lang;
+        // 2. Split text into short chunks (< 180 characters) for mobile TTS compatibility
+        const chunks = splitTextIntoChunks(cleanTextToRead, 180);
+        if (chunks.length === 0) return;
+
+        // 3. Detect language
+        const isTamil = /[\u0B80-\u0BFF]/.test(cleanTextToRead);
+        const isTelugu = /[\u0C00-\u0C7F]/.test(cleanTextToRead);
+
+        let targetLang = 'en-US';
+        if (isTamil) targetLang = 'ta-IN';
+        else if (isTelugu) targetLang = 'te-IN';
+        else if (voices.length > 0 && voices[selectedVoiceIndex]) {
+            targetLang = voices[selectedVoiceIndex].lang;
+        }
+
+        let matchedVoice: SpeechSynthesisVoice | undefined;
+        if (voices.length > 0) {
+            const selectedVoice = voices[selectedVoiceIndex];
+            if (
+                (isTamil && selectedVoice?.lang?.startsWith('ta')) ||
+                (isTelugu && selectedVoice?.lang?.startsWith('te')) ||
+                (!isTamil && !isTelugu)
+            ) {
+                matchedVoice = selectedVoice;
+            } else {
+                matchedVoice = voices.find(v => v.lang.startsWith(targetLang));
+            }
+        }
+
+        const currentRate = rateOverride ?? speechRate;
+
+        // 4. Create Utterance objects for all chunks and store in Ref (prevents mobile JS Garbage Collection)
+        const utterances = chunks.map((chunkText) => {
+            const utterance = new SpeechSynthesisUtterance(chunkText);
+            utterance.lang = targetLang;
+            if (matchedVoice) {
+                utterance.voice = matchedVoice;
+            }
+            utterance.rate = currentRate;
+            utterance.pitch = 1;
+            return utterance;
+        });
+
+        activeUtterancesRef.current = utterances;
+
+        // 5. Play chunks sequentially using onend callback with session check
+        const speakChunkAtIndex = (index: number) => {
+            // Guard: If speech session changed (stopped/restarted), abort immediately
+            if (speechSessionIdRef.current !== currentSessionId) {
+                return;
             }
 
-            let matchedVoice: SpeechSynthesisVoice | undefined;
-            if (voices.length > 0) {
-                const selectedVoice = voices[selectedVoiceIndex];
-                if (
-                    (isTamil && selectedVoice?.lang?.startsWith('ta')) ||
-                    (isTelugu && selectedVoice?.lang?.startsWith('te')) ||
-                    (!isTamil && !isTelugu)
-                ) {
-                    matchedVoice = selectedVoice;
+            if (index >= utterances.length) {
+                setIsSpeaking(false);
+                return;
+            }
+
+            const currentUtterance = utterances[index];
+
+            currentUtterance.onstart = () => {
+                if (speechSessionIdRef.current === currentSessionId) {
+                    setIsSpeaking(true);
+                }
+            };
+
+            currentUtterance.onend = () => {
+                if (speechSessionIdRef.current !== currentSessionId) return;
+
+                if (index + 1 < utterances.length) {
+                    speakChunkAtIndex(index + 1);
                 } else {
-                    matchedVoice = voices.find(v => v.lang.startsWith(targetLang));
-                }
-            }
-
-            const currentRate = rateOverride ?? speechRate;
-
-            // 4. Create Utterance objects for all chunks and store in Ref (prevents mobile JS Garbage Collection)
-            const utterances = chunks.map((chunkText) => {
-                const utterance = new SpeechSynthesisUtterance(chunkText);
-                utterance.lang = targetLang;
-                if (matchedVoice) {
-                    utterance.voice = matchedVoice;
-                }
-                utterance.rate = currentRate;
-                utterance.pitch = 1;
-                return utterance;
-            });
-
-            activeUtterancesRef.current = utterances;
-
-            // 5. Play chunks sequentially using onend callback (Mobile Safe)
-            const speakChunkAtIndex = (index: number) => {
-                if (index >= utterances.length) {
                     setIsSpeaking(false);
+                }
+            };
+
+            currentUtterance.onerror = (e) => {
+                if (speechSessionIdRef.current !== currentSessionId) return;
+
+                // Stop progression if cancelled or interrupted
+                if (e.error === 'interrupted' || e.error === 'canceled') {
                     return;
                 }
 
-                const currentUtterance = utterances[index];
-
-                currentUtterance.onstart = () => {
-                    setIsSpeaking(true);
-                };
-
-                currentUtterance.onend = () => {
-                    if (index + 1 < utterances.length) {
-                        speakChunkAtIndex(index + 1);
-                    } else {
-                        setIsSpeaking(false);
-                    }
-                };
-
-                currentUtterance.onerror = (e) => {
-                    console.warn('TTS Chunk error:', e);
-                    if (index + 1 < utterances.length) {
-                        speakChunkAtIndex(index + 1);
-                    } else {
-                        setIsSpeaking(false);
-                    }
-                };
-
-                window.speechSynthesis.speak(currentUtterance);
+                console.warn('TTS Chunk error:', e);
+                if (index + 1 < utterances.length) {
+                    speakChunkAtIndex(index + 1);
+                } else {
+                    setIsSpeaking(false);
+                }
             };
 
-            speakChunkAtIndex(0);
-        }
+            // Mobile Chrome / Safari check: Resume if engine got paused
+            if (window.speechSynthesis.paused) {
+                window.speechSynthesis.resume();
+            }
+
+            window.speechSynthesis.speak(currentUtterance);
+        };
+
+        // 20ms delay ensures mobile Android/iOS audio threads settle cancel() before queuing new speech
+        setTimeout(() => {
+            if (speechSessionIdRef.current === currentSessionId) {
+                speakChunkAtIndex(0);
+            }
+        }, 20);
     };
 
     // 5. Handle Live Playback Rate / Speed Changes
     const handleRateChange = (newRate: number) => {
         setSpeechRate(newRate);
         if (isSpeaking || (typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
-            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-            }
-            setIsSpeaking(false);
+            handleStopSpeech();
             setTimeout(() => {
                 handlePlaySpeech(newRate);
-            }, 50);
+            }, 100);
         }
     };
 
@@ -678,7 +703,7 @@ export default function ReaderPage() {
         >
             {/* Reader Top Toolbar - Responsive for Mobile & Desktop */}
             <div
-                className="sticky top-0 z-40 px-2 sm:px-6 py-1.5 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between shadow-sm backdrop-blur-md border-b transition-colors gap-1 sm:gap-3 max-w-full"
+                className="sticky top-0 z-40 px-2 sm:px-6 py-1.5 sm:py-2.5 flex items-center justify-between shadow-sm backdrop-blur-md border-b transition-colors gap-1 sm:gap-3 max-w-full"
                 style={{
                     backgroundColor: activeTheme.toolbarBg,
                     borderColor: activeTheme.borderColor,
@@ -696,7 +721,7 @@ export default function ReaderPage() {
                 </button>
 
                 {/* Right Action Controls: Search, Font Controls, Speech Controls, Border Selector, Theme Selector */}
-                <div className="flex items-center gap-1 sm:gap-2.5 flex-wrap sm:flex-nowrap justify-end flex-1 min-w-0">
+                <div className="flex items-center gap-1 sm:gap-2.5 justify-end flex-1 min-w-0">
                     <SearchPopover
                         bookId={bookId}
                         baseRoute="/reader/read"
@@ -725,13 +750,14 @@ export default function ReaderPage() {
                         </button>
                     </div>
 
-                    {/* Read Aloud Speech Controls: Voice Selector, Speed Selector & Play/Stop Button */}
+                    {/* Read Aloud Speech Controls */}
                     <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+                        {/* Voice Selector Dropdown (Desktop Only) */}
                         {voices.length > 0 && (
                             <select
                                 value={selectedVoiceIndex}
                                 onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
-                                className="px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs max-w-[65px] xs:max-w-[95px] sm:max-w-[150px] truncate outline-none cursor-pointer"
+                                className="hidden md:inline-block px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs max-w-[150px] truncate outline-none cursor-pointer"
                                 style={{
                                     borderColor: activeTheme.borderColor,
                                     backgroundColor: activeTheme.toolbarBg,
@@ -747,11 +773,11 @@ export default function ReaderPage() {
                             </select>
                         )}
 
-                        {/* Speech Speed / Playback Rate Selector Dropdown */}
+                        {/* Speech Speed / Playback Rate Selector Dropdown (Desktop Only) */}
                         <select
                             value={speechRate}
                             onChange={(e) => handleRateChange(Number(e.target.value))}
-                            className="px-1 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs outline-none cursor-pointer flex-shrink-0"
+                            className="hidden md:inline-block px-1 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs outline-none cursor-pointer flex-shrink-0"
                             style={{
                                 borderColor: activeTheme.borderColor,
                                 backgroundColor: activeTheme.toolbarBg,
@@ -768,6 +794,7 @@ export default function ReaderPage() {
                             <option value={2.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">2.0x</option>
                         </select>
 
+                        {/* Speech Play / Stop Button (Always Visible) */}
                         {isSpeaking ? (
                             <button
                                 onClick={handleStopSpeech}
@@ -790,8 +817,8 @@ export default function ReaderPage() {
                         )}
                     </div>
 
-                    {/* Border Design Selector Dropdown */}
-                    <div className="relative" ref={borderMenuRef}>
+                    {/* Border Design Selector Dropdown (Desktop Only) */}
+                    <div className="hidden md:block relative" ref={borderMenuRef}>
                         <button
                             onClick={() => setIsBorderMenuOpen(!isBorderMenuOpen)}
                             className="px-1.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1 sm:gap-2 shadow-xs flex-shrink-0"
@@ -799,7 +826,7 @@ export default function ReaderPage() {
                             title="Border Style"
                         >
                             <span className="text-xs sm:text-base leading-none">{activeBorder.icon}</span>
-                            <span className="hidden md:inline">{activeBorder.name}</span>
+                            <span className="hidden lg:inline">{activeBorder.name}</span>
                             <Frame className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-70 flex-shrink-0" />
                         </button>
 
@@ -839,14 +866,186 @@ export default function ReaderPage() {
                         )}
                     </div>
 
-                    {/* Reusable Theme Selector Dropdown Component */}
-                    <ThemeSelector
-                        selectedThemeId={selectedThemeId}
-                        onSelectTheme={handleSelectTheme}
-                        activeTheme={activeTheme}
-                    />
+                    {/* Reusable Theme Selector Dropdown Component (Desktop Only) */}
+                    <div className="hidden md:block">
+                        <ThemeSelector
+                            selectedThemeId={selectedThemeId}
+                            onSelectTheme={handleSelectTheme}
+                            activeTheme={activeTheme}
+                        />
+                    </div>
+
+                    {/* Mobile Options Menu Button (Mobile Only) */}
+                    <button
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="md:hidden p-1.5 sm:p-2 rounded-xl border text-xs font-semibold hover:opacity-80 transition flex items-center gap-1 shadow-xs flex-shrink-0"
+                        style={{ borderColor: activeTheme.borderColor }}
+                        title="Reader Settings & Audio"
+                    >
+                        <SlidersHorizontal className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                        <span className="hidden xs:inline text-xs">Options</span>
+                    </button>
                 </div>
             </div>
+
+            {/* Mobile Sidebar / Drawer for Options (Theme, Border, Voice & Speed) */}
+            {isMobileMenuOpen && (
+                <div className="fixed inset-0 z-50 md:hidden flex justify-end">
+                    {/* Backdrop Overlay */}
+                    <div
+                        className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                    />
+
+                    {/* Drawer Content Panel */}
+                    <div
+                        className="relative w-80 max-w-[85vw] h-full shadow-2xl flex flex-col p-4 z-10 overflow-y-auto animate-in slide-in-from-right duration-200 border-l"
+                        style={{
+                            backgroundColor: activeTheme.isDark ? '#0f172a' : '#ffffff',
+                            borderColor: activeTheme.borderColor,
+                            color: activeTheme.textColor
+                        }}
+                    >
+                        {/* Drawer Header with Title and Close Icon */}
+                        <div className="flex items-center justify-between pb-3 border-b mb-4" style={{ borderColor: activeTheme.borderColor }}>
+                            <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider">
+                                <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
+                                <span>Reader Options</span>
+                            </div>
+                            <button
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="p-1.5 rounded-xl hover:bg-current/10 transition flex items-center justify-center"
+                                title="Close Menu"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-5 flex-1 pb-6">
+                            {/* 1. Speech Voice & Language Dropdown */}
+                            {voices.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
+                                        <Volume2 className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span>Speech Voice / Language</span>
+                                    </label>
+                                    <select
+                                        value={selectedVoiceIndex}
+                                        onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
+                                        className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none cursor-pointer shadow-xs"
+                                        style={{
+                                            borderColor: activeTheme.borderColor,
+                                            backgroundColor: activeTheme.isDark ? '#1e293b' : '#f8fafc',
+                                            color: activeTheme.textColor
+                                        }}
+                                    >
+                                        {voices.map((voice, idx) => (
+                                            <option key={`m-${voice.name}-${idx}`} value={idx} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">
+                                                {voice.name.replace(/Google|Microsoft|Apple|Desktop|Natural/gi, '').trim() || voice.name} ({voice.lang})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* 2. Speech Speed / Playback Rate Selector */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold uppercase tracking-wider opacity-70">
+                                    Playback Speed
+                                </label>
+                                <select
+                                    value={speechRate}
+                                    onChange={(e) => handleRateChange(Number(e.target.value))}
+                                    className="w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none cursor-pointer shadow-xs"
+                                    style={{
+                                        borderColor: activeTheme.borderColor,
+                                        backgroundColor: activeTheme.isDark ? '#1e293b' : '#f8fafc',
+                                        color: activeTheme.textColor
+                                    }}
+                                >
+                                    <option value={0.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.5x (Slow)</option>
+                                    <option value={0.75} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.75x</option>
+                                    <option value={0.9} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.9x (Normal)</option>
+                                    <option value={1.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.0x</option>
+                                    <option value={1.25} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.25x</option>
+                                    <option value={1.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.5x (Fast)</option>
+                                    <option value={2.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">2.0x (Very Fast)</option>
+                                </select>
+                            </div>
+
+                            {/* 3. Border Style Selector */}
+                            <div className="space-y-2 pt-3 border-t" style={{ borderColor: activeTheme.borderColor }}>
+                                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
+                                    <Frame className="w-3.5 h-3.5 opacity-70" />
+                                    <span>Classical Border Design</span>
+                                </label>
+                                <div className="space-y-1.5">
+                                    {BORDER_PRESETS.map((preset) => {
+                                        const isSelected = preset.id === selectedBorderId;
+                                        return (
+                                            <button
+                                                key={`m-${preset.id}`}
+                                                onClick={() => {
+                                                    handleSelectBorder(preset.id);
+                                                }}
+                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-between ${isSelected
+                                                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-200/50'
+                                                    : 'hover:bg-current/10 border border-transparent'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className="w-6 h-6 rounded-lg bg-current/10 flex items-center justify-center text-sm font-serif">
+                                                        {preset.icon}
+                                                    </span>
+                                                    <div>
+                                                        <div className="font-semibold">{preset.name}</div>
+                                                        <div className="text-[10px] opacity-70">{preset.description}</div>
+                                                    </div>
+                                                </div>
+                                                {isSelected && <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* 4. Theme & Lighting Selector */}
+                            <div className="space-y-2 pt-3 border-t" style={{ borderColor: activeTheme.borderColor }}>
+                                <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
+                                    <Palette className="w-3.5 h-3.5 opacity-70" />
+                                    <span>Reader Theme</span>
+                                </label>
+                                <div className="grid grid-cols-1 gap-1.5 max-h-60 overflow-y-auto pr-1">
+                                    {THEME_PRESETS.map((preset) => {
+                                        const isSelected = preset.id === selectedThemeId;
+                                        return (
+                                            <button
+                                                key={`m-t-${preset.id}`}
+                                                onClick={() => {
+                                                    handleSelectTheme(preset.id);
+                                                }}
+                                                className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-between ${isSelected
+                                                    ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200/50'
+                                                    : 'hover:bg-current/10 border border-transparent'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <span
+                                                        className="w-4 h-4 rounded-full border shadow-xs flex-shrink-0"
+                                                        style={{ background: preset.swatchColor }}
+                                                    />
+                                                    <span>{preset.name}</span>
+                                                </div>
+                                                {isSelected && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Reader Canvas */}
             <div className="max-w-8xl mx-auto px-4 py-2">
