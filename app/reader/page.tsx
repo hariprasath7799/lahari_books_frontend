@@ -46,7 +46,7 @@ export default function BookLibrary() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                         {books.map((book) => {
-                            const coverUrl = getCoverImageUrl(book.coverImageUrl);
+                            const coverUrl = book.coverImageUrl;
                             return (
                                 <Link href={`/reader/read/${book._id}`} key={book._id} className="group flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl hover:border-indigo-200 transition-all duration-300 transform hover:-translate-y-1">
                                     <div className="h-52 relative overflow-hidden bg-slate-900 flex items-end p-5">
@@ -66,29 +66,29 @@ export default function BookLibrary() {
                                         )}
                                         <h2 className="relative z-10 text-xl font-bold text-white leading-snug drop-shadow-lg">{book.title}</h2>
                                     </div>
-                                <div className="p-5 flex-grow flex flex-col justify-between bg-white">
-                                    <div>
-                                        <p className="text-sm font-medium text-indigo-600 uppercase tracking-wider mb-1">Author</p>
-                                        <p className="text-gray-900 font-semibold">{book.author}</p>
-                                    </div>
-                                    <div className="mt-4 flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-4">
-                                        <span>{book.totalPages} Pages</span>
-                                        {book.highlightedPages.length > 0 && (
-                                            <span className="text-yellow-600 bg-yellow-50 px-2 py-1 rounded text-xs font-semibold">
-                                                {book.highlightedPages.length} Highlighted
+                                    <div className="p-5 flex-grow flex flex-col justify-between bg-white">
+                                        <div>
+                                            <p className="text-sm font-medium text-indigo-600 uppercase tracking-wider mb-1">Author</p>
+                                            <p className="text-gray-900 font-semibold">{book.author}</p>
+                                        </div>
+                                        <div className="mt-4 flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-4">
+                                            <span>{book.totalPages} Pages</span>
+                                            {book.highlightedPages.length > 0 && (
+                                                <span className="text-yellow-600 bg-yellow-50 px-2 py-1 rounded text-xs font-semibold">
+                                                    {book.highlightedPages.length} Highlighted
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-4 flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-4">
+                                            <span>{book.publishingYear}</span>
+                                            <span className="font-medium text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                                Read Now <span>→</span>
                                             </span>
-                                        )}
+                                        </div>
                                     </div>
-                                    <div className="mt-4 flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-4">
-                                        <span>{book.publishingYear}</span>
-                                        <span className="font-medium text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                            Read Now <span>→</span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </Link>
-                        );
-                    })}
+                                </Link>
+                            );
+                        })}
 
                         {books.length === 0 && (
                             <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-2xl border border-dashed border-gray-300">
