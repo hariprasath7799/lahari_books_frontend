@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector, useDispatch } from 'react-redux';
 import { toggleTheme, setFontSize, setTheme } from '@/lib/store';
 import api from '@/lib/api';
-import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame, Volume2, Square, Play, SlidersHorizontal, X, Menu } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Bookmark, Sparkles, BookOpen, Palette, Check, Frame, Volume2, Square, Play, SlidersHorizontal, X, Menu, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import BookFrame from '@/components/BookFrame';
 import ThemeSelector, { THEME_PRESETS, ThemeConfig } from '@/components/ThemeSelector';
 import SearchPopover from '@/components/SearchPopover';
@@ -21,8 +21,6 @@ interface PageData {
     totalPages: number;
     highlightedPages: number[];
 }
-
-
 
 export interface BorderPreset {
     id: string;
@@ -85,6 +83,7 @@ export default function ReaderPage() {
 
     const bookId = (params?.id || params?.bookId) as string;
     const [pageNumber, setPageNumber] = useState(1);
+    const [isZenMode, setIsZenMode] = useState<boolean>(false);
 
     // Sync pageNumber when ?pageNumber= URL param changes (e.g. from SearchPopover click)
     const urlPageParam = searchParams.get('pageNumber');
@@ -481,7 +480,7 @@ export default function ReaderPage() {
         setTouchStartY(null);
     };
 
-    // Keyboard Arrow Navigation
+    // Keyboard Navigation & Shortcuts (Arrow keys & 'F' for Zen Mode)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
@@ -493,6 +492,8 @@ export default function ReaderPage() {
                 if (pageNumber > 1 && !pageLoading) {
                     setPageNumber(p => p - 1);
                 }
+            } else if (e.key === 'f' || e.key === 'F') {
+                setIsZenMode(prev => !prev);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -599,7 +600,9 @@ export default function ReaderPage() {
 
                         const span = doc.createElement('span');
                         span.setAttribute('data-sentence-index', idx.toString());
-                        span.className = 'cursor-pointer transition-colors duration-200 rounded-sm inline px-0.5';
+                        span.className = `reader-sentence cursor-pointer transition-all duration-200 rounded-md inline px-1 py-0.5 ${
+                            isMarked ? 'reader-sentence-marked font-semibold' : ''
+                        }`;
                         span.style.color = isMarked ? activeTheme.highlightText : activeTheme.textColor;
                         span.style.backgroundColor = isMarked ? activeTheme.highlightBg : 'transparent';
 
@@ -695,209 +698,249 @@ export default function ReaderPage() {
 
     return (
         <div
-            className="min-h-screen transition-all duration-500 scroll-smooth"
+            className="min-h-screen transition-all duration-500 scroll-smooth relative pb-24"
             style={{
                 background: activeTheme.bgCss.replace('background-color: ', '').replace('background: ', '').replace(';', ''),
                 color: activeTheme.textColor
             }}
         >
-            {/* Reader Top Toolbar - Responsive for Mobile & Desktop */}
-            <div
-                className="sticky top-0 z-40 px-2 sm:px-6 py-1.5 sm:py-2.5 flex items-center justify-between shadow-sm backdrop-blur-md border-b transition-colors gap-1 sm:gap-3 max-w-full"
-                style={{
-                    backgroundColor: activeTheme.toolbarBg,
-                    borderColor: activeTheme.borderColor,
-                    color: activeTheme.textColor
-                }}
-            >
-                {/* Back to Library */}
-                <button
-                    onClick={() => router.push('/')}
-                    className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-transparent hover:border-current/15 text-xs sm:text-sm font-semibold hover:opacity-80 transition flex items-center gap-1 flex-shrink-0"
-                    title="Back to Library"
-                >
-                    <ChevronLeft className="w-4 h-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">Library</span>
-                </button>
+            {/* Top Reading Progress Bar */}
+            <div className="fixed top-0 left-0 right-0 h-1 z-50 bg-black/10 dark:bg-white/10 pointer-events-none">
+                <div
+                    className="h-full transition-all duration-200 ease-out bg-gradient-to-r from-amber-400 via-indigo-500 to-teal-400 shadow-xs"
+                    style={{ width: `${Math.max(1, Math.min(100, (pageNumber / Math.max(1, totalPages)) * 100))}%` }}
+                />
+            </div>
 
-                {/* Right Action Controls: Search, Font Controls, Speech Controls, Border Selector, Theme Selector */}
-                <div className="flex items-center gap-1 sm:gap-2.5 justify-end flex-1 min-w-0">
-                    <SearchPopover
-                        bookId={bookId}
-                        baseRoute="/reader/read"
-                        variant="icon"
-                        borderColor={activeTheme.borderColor}
-                    />
-                    {/* Compact Segmented Font Size Pill */}
-                    <div
-                        className="flex items-center rounded-xl border p-0.5 shadow-xs flex-shrink-0"
-                        style={{ borderColor: activeTheme.borderColor }}
-                    >
+            {/* Floating Zen Focus Mode Exit Pill */}
+            {isZenMode && (
+                <button
+                    onClick={() => setIsZenMode(false)}
+                    className="fixed top-4 right-4 z-50 px-3.5 py-1.5 rounded-full bg-slate-900/80 text-white text-xs font-semibold backdrop-blur-xl border border-white/20 shadow-2xl hover:bg-slate-900 transition flex items-center gap-2 animate-in fade-in duration-200"
+                    title="Exit Focus Mode (Keyboard shortcut: F)"
+                >
+                    <EyeOff className="w-4 h-4 text-amber-400" />
+                    <span>Exit Focus Mode</span>
+                    <span className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] font-mono">F</span>
+                </button>
+            )}
+
+            {/* Reader Top Toolbar - Responsive for Mobile & Desktop */}
+            {!isZenMode && (
+                <div
+                    className="sticky top-0 z-40 px-3 sm:px-6 py-2 flex items-center justify-between shadow-xs backdrop-blur-xl border-b transition-colors gap-2 max-w-full"
+                    style={{
+                        backgroundColor: activeTheme.toolbarBg,
+                        borderColor: activeTheme.borderColor,
+                        color: activeTheme.textColor
+                    }}
+                >
+                    {/* Back to Library & Book Title */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
                         <button
-                            onClick={() => dispatch(setFontSize(Math.max(14, fontSize - 2)))}
-                            className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
-                            title="Decrease Font Size"
+                            onClick={() => router.push('/')}
+                            className="px-2.5 py-1.5 rounded-xl border border-transparent hover:border-current/20 text-xs sm:text-sm font-semibold hover:opacity-85 transition flex items-center gap-1.5 flex-shrink-0"
+                            title="Back to Library"
                         >
-                            A-
+                            <ChevronLeft className="w-4 h-4" />
+                            <span className="hidden sm:inline">Library</span>
                         </button>
-                        <span className="w-[1px] h-3 opacity-25 bg-current" />
-                        <button
-                            onClick={() => dispatch(setFontSize(Math.min(32, fontSize + 2)))}
-                            className="px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
-                            title="Increase Font Size"
-                        >
-                            A+
-                        </button>
+                        <span className="hidden lg:inline opacity-30">|</span>
+                        <div className="hidden lg:flex items-center gap-1.5 text-xs font-semibold opacity-75">
+                            <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="truncate max-w-[200px]">Reading Book</span>
+                        </div>
                     </div>
 
-                    {/* Read Aloud Speech Controls */}
-                    <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-                        {/* Voice Selector Dropdown (Desktop Only) */}
-                        {voices.length > 0 && (
+                    {/* Right Action Controls */}
+                    <div className="flex items-center gap-1.5 sm:gap-2.5 justify-end flex-1 min-w-0">
+                        <SearchPopover
+                            bookId={bookId}
+                            baseRoute="/reader/read"
+                            variant="icon"
+                            borderColor={activeTheme.borderColor}
+                        />
+
+                        {/* Segmented Font Size Controls */}
+                        <div
+                            className="flex items-center rounded-xl border p-0.5 shadow-xs flex-shrink-0"
+                            style={{ borderColor: activeTheme.borderColor }}
+                        >
+                            <button
+                                onClick={() => dispatch(setFontSize(Math.max(14, fontSize - 2)))}
+                                className="px-2 py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
+                                title="Decrease Font Size"
+                            >
+                                A-
+                            </button>
+                            <span className="px-1 text-[11px] font-mono opacity-60 select-none">{fontSize}px</span>
+                            <button
+                                onClick={() => dispatch(setFontSize(Math.min(32, fontSize + 2)))}
+                                className="px-2 py-1 rounded-lg text-xs font-bold hover:bg-current/10 transition"
+                                title="Increase Font Size"
+                            >
+                                A+
+                            </button>
+                        </div>
+
+                        {/* Read Aloud Speech Controls */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {voices.length > 0 && (
+                                <select
+                                    value={selectedVoiceIndex}
+                                    onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
+                                    className="hidden md:inline-block px-2 py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs max-w-[140px] truncate outline-none cursor-pointer"
+                                    style={{
+                                        borderColor: activeTheme.borderColor,
+                                        backgroundColor: activeTheme.toolbarBg,
+                                        color: activeTheme.textColor
+                                    }}
+                                    title="Select Voice"
+                                >
+                                    {voices.map((voice, idx) => (
+                                        <option key={`${voice.name}-${idx}`} value={idx} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">
+                                            {voice.name.replace(/Google|Microsoft|Apple|Desktop|Natural/gi, '').trim() || voice.name} ({voice.lang})
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
                             <select
-                                value={selectedVoiceIndex}
-                                onChange={(e) => setSelectedVoiceIndex(Number(e.target.value))}
-                                className="hidden md:inline-block px-1.5 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs max-w-[150px] truncate outline-none cursor-pointer"
+                                value={speechRate}
+                                onChange={(e) => handleRateChange(Number(e.target.value))}
+                                className="hidden md:inline-block px-2 py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs outline-none cursor-pointer flex-shrink-0"
                                 style={{
                                     borderColor: activeTheme.borderColor,
                                     backgroundColor: activeTheme.toolbarBg,
                                     color: activeTheme.textColor
                                 }}
-                                title="Select Voice"
+                                title="Playback Speed"
                             >
-                                {voices.map((voice, idx) => (
-                                    <option key={`${voice.name}-${idx}`} value={idx} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">
-                                        {voice.name.replace(/Google|Microsoft|Apple|Desktop|Natural/gi, '').trim() || voice.name} ({voice.lang})
-                                    </option>
-                                ))}
+                                <option value={0.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.5x</option>
+                                <option value={0.75} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.75x</option>
+                                <option value={0.9} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.9x</option>
+                                <option value={1.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.0x</option>
+                                <option value={1.25} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.25x</option>
+                                <option value={1.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.5x</option>
+                                <option value={2.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">2.0x</option>
                             </select>
-                        )}
 
-                        {/* Speech Speed / Playback Rate Selector Dropdown (Desktop Only) */}
-                        <select
-                            value={speechRate}
-                            onChange={(e) => handleRateChange(Number(e.target.value))}
-                            className="hidden md:inline-block px-1 py-1 sm:px-2 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition shadow-xs outline-none cursor-pointer flex-shrink-0"
-                            style={{
-                                borderColor: activeTheme.borderColor,
-                                backgroundColor: activeTheme.toolbarBg,
-                                color: activeTheme.textColor
-                            }}
-                            title="Playback Speed"
-                        >
-                            <option value={0.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.5x</option>
-                            <option value={0.75} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.75x</option>
-                            <option value={0.9} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">0.9x</option>
-                            <option value={1.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.0x</option>
-                            <option value={1.25} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.25x</option>
-                            <option value={1.5} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">1.5x</option>
-                            <option value={2.0} className="text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900">2.0x</option>
-                        </select>
+                            {isSpeaking ? (
+                                <button
+                                    onClick={handleStopSpeech}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 transition flex items-center gap-1.5 shadow-xs flex-shrink-0"
+                                    title="Stop Reading Aloud"
+                                >
+                                    <div className="flex items-center gap-0.5 h-3.5">
+                                        <span className="w-0.5 bg-red-500 animate-soundwave-1" />
+                                        <span className="w-0.5 bg-red-500 animate-soundwave-2" />
+                                        <span className="w-0.5 bg-red-500 animate-soundwave-3" />
+                                    </div>
+                                    <span className="hidden xs:inline">Stop</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => handlePlaySpeech()}
+                                    className="px-3 py-1.5 rounded-xl border text-xs font-medium hover:opacity-85 transition flex items-center gap-1.5 shadow-xs flex-shrink-0"
+                                    style={{ borderColor: activeTheme.borderColor }}
+                                    title="Read Aloud"
+                                >
+                                    <Volume2 className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                                    <span className="hidden xs:inline">Listen</span>
+                                </button>
+                            )}
+                        </div>
 
-                        {/* Speech Play / Stop Button (Always Visible) */}
-                        {isSpeaking ? (
+                        {/* Border Design Selector */}
+                        <div className="hidden md:block relative" ref={borderMenuRef}>
                             <button
-                                onClick={handleStopSpeech}
-                                className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-200 dark:hover:bg-red-900 transition flex items-center gap-1 shadow-xs flex-shrink-0"
-                                title="Stop Reading Aloud"
-                            >
-                                <Square className="w-3.5 h-3.5 fill-current flex-shrink-0" />
-                                <span className="hidden xs:inline">Stop</span>
-                            </button>
-                        ) : (
-                            <button
-                                onClick={() => handlePlaySpeech()}
-                                className="px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-medium hover:opacity-80 transition flex items-center gap-1 shadow-xs flex-shrink-0"
+                                onClick={() => setIsBorderMenuOpen(!isBorderMenuOpen)}
+                                className="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-85 transition flex items-center gap-2 shadow-xs flex-shrink-0"
                                 style={{ borderColor: activeTheme.borderColor }}
-                                title="Read Aloud"
+                                title="Border Style"
                             >
-                                <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 opacity-90 flex-shrink-0" />
-                                <span className="hidden xs:inline">Listen</span>
+                                <span className="text-base leading-none">{activeBorder.icon}</span>
+                                <span className="hidden lg:inline">{activeBorder.name}</span>
+                                <Frame className="w-3.5 h-3.5 opacity-70 flex-shrink-0" />
                             </button>
-                        )}
-                    </div>
 
-                    {/* Border Design Selector Dropdown (Desktop Only) */}
-                    <div className="hidden md:block relative" ref={borderMenuRef}>
+                            {isBorderMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-24px)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 py-3 px-2 z-50 max-h-[85vh] overflow-y-auto text-gray-900 dark:text-gray-100 animate-in fade-in zoom-in-95 duration-150">
+                                    <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-800 mb-2">
+                                        <h4 className="text-xs font-bold uppercase tracking-wider opacity-60">Classical Border Design</h4>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        {BORDER_PRESETS.map((preset) => {
+                                            const isSelected = preset.id === selectedBorderId;
+                                            return (
+                                                <button
+                                                    key={preset.id}
+                                                    onClick={() => handleSelectBorder(preset.id)}
+                                                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-between ${isSelected
+                                                        ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-200/50'
+                                                        : 'hover:bg-gray-100 dark:hover:bg-slate-800'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-sm font-serif border border-gray-200 dark:border-slate-700">
+                                                            {preset.icon}
+                                                        </span>
+                                                        <div>
+                                                            <div className="font-semibold text-gray-900 dark:text-gray-100">{preset.name}</div>
+                                                            <div className="text-[10px] text-gray-500 dark:text-gray-400">{preset.description}</div>
+                                                        </div>
+                                                    </div>
+                                                    {isSelected && <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Theme Selector */}
+                        <div className="hidden md:block">
+                            <ThemeSelector
+                                selectedThemeId={selectedThemeId}
+                                onSelectTheme={handleSelectTheme}
+                                activeTheme={activeTheme}
+                            />
+                        </div>
+
+                        {/* Zen Focus Mode Button */}
                         <button
-                            onClick={() => setIsBorderMenuOpen(!isBorderMenuOpen)}
-                            className="px-1.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl border text-xs sm:text-sm font-medium hover:opacity-80 transition flex items-center gap-1 sm:gap-2 shadow-xs flex-shrink-0"
+                            onClick={() => setIsZenMode(true)}
+                            className="hidden sm:flex p-2 rounded-xl border text-xs font-semibold hover:opacity-85 transition items-center gap-1.5 shadow-xs flex-shrink-0"
                             style={{ borderColor: activeTheme.borderColor }}
-                            title="Border Style"
+                            title="Zen Focus Mode (Keyboard shortcut: F)"
                         >
-                            <span className="text-xs sm:text-base leading-none">{activeBorder.icon}</span>
-                            <span className="hidden lg:inline">{activeBorder.name}</span>
-                            <Frame className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-70 flex-shrink-0" />
+                            <Eye className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                            <span className="hidden xl:inline text-xs">Focus</span>
                         </button>
 
-                        {isBorderMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-24px)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 py-3 px-2 z-50 max-h-[85vh] overflow-y-auto text-gray-900 dark:text-gray-100 animate-in fade-in zoom-in-95 duration-150">
-                                <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-800 mb-2">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider opacity-60">Classical Border Design</h4>
-                                </div>
-
-                                <div className="space-y-1">
-                                    {BORDER_PRESETS.map((preset) => {
-                                        const isSelected = preset.id === selectedBorderId;
-                                        return (
-                                            <button
-                                                key={preset.id}
-                                                onClick={() => handleSelectBorder(preset.id)}
-                                                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-between ${isSelected
-                                                    ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold border border-amber-200/50'
-                                                    : 'hover:bg-gray-100 dark:hover:bg-slate-800'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <span className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-sm font-serif border border-gray-200 dark:border-slate-700">
-                                                        {preset.icon}
-                                                    </span>
-                                                    <div>
-                                                        <div className="font-semibold text-gray-900 dark:text-gray-100">{preset.name}</div>
-                                                        <div className="text-[10px] text-gray-500 dark:text-gray-400">{preset.description}</div>
-                                                    </div>
-                                                </div>
-                                                {isSelected && <Check className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                        {/* Mobile Options Menu Button */}
+                        <button
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="md:hidden p-2 rounded-xl border text-xs font-semibold hover:opacity-85 transition flex items-center gap-1 shadow-xs flex-shrink-0"
+                            style={{ borderColor: activeTheme.borderColor }}
+                            title="Reader Settings & Audio"
+                        >
+                            <SlidersHorizontal className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                            <span className="hidden xs:inline text-xs">Options</span>
+                        </button>
                     </div>
-
-                    {/* Reusable Theme Selector Dropdown Component (Desktop Only) */}
-                    <div className="hidden md:block">
-                        <ThemeSelector
-                            selectedThemeId={selectedThemeId}
-                            onSelectTheme={handleSelectTheme}
-                            activeTheme={activeTheme}
-                        />
-                    </div>
-
-                    {/* Mobile Options Menu Button (Mobile Only) */}
-                    <button
-                        onClick={() => setIsMobileMenuOpen(true)}
-                        className="md:hidden p-1.5 sm:p-2 rounded-xl border text-xs font-semibold hover:opacity-80 transition flex items-center gap-1 shadow-xs flex-shrink-0"
-                        style={{ borderColor: activeTheme.borderColor }}
-                        title="Reader Settings & Audio"
-                    >
-                        <SlidersHorizontal className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-                        <span className="hidden xs:inline text-xs">Options</span>
-                    </button>
                 </div>
-            </div>
+            )}
 
-            {/* Mobile Sidebar / Drawer for Options (Theme, Border, Voice & Speed) */}
+            {/* Mobile Drawer */}
             {isMobileMenuOpen && (
                 <div className="fixed inset-0 z-50 md:hidden flex justify-end">
-                    {/* Backdrop Overlay */}
                     <div
                         className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
                         onClick={() => setIsMobileMenuOpen(false)}
                     />
-
-                    {/* Drawer Content Panel */}
                     <div
                         className="relative w-80 max-w-[85vw] h-full shadow-2xl flex flex-col p-4 z-10 overflow-y-auto animate-in slide-in-from-right duration-200 border-l"
                         style={{
@@ -906,7 +949,6 @@ export default function ReaderPage() {
                             color: activeTheme.textColor
                         }}
                     >
-                        {/* Drawer Header with Title and Close Icon */}
                         <div className="flex items-center justify-between pb-3 border-b mb-4" style={{ borderColor: activeTheme.borderColor }}>
                             <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider">
                                 <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
@@ -922,7 +964,6 @@ export default function ReaderPage() {
                         </div>
 
                         <div className="space-y-5 flex-1 pb-6">
-                            {/* 1. Speech Voice & Language Dropdown */}
                             {voices.length > 0 && (
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
@@ -948,7 +989,6 @@ export default function ReaderPage() {
                                 </div>
                             )}
 
-                            {/* 2. Speech Speed / Playback Rate Selector */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold uppercase tracking-wider opacity-70">
                                     Playback Speed
@@ -973,7 +1013,6 @@ export default function ReaderPage() {
                                 </select>
                             </div>
 
-                            {/* 3. Border Style Selector */}
                             <div className="space-y-2 pt-3 border-t" style={{ borderColor: activeTheme.borderColor }}>
                                 <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
                                     <Frame className="w-3.5 h-3.5 opacity-70" />
@@ -1009,7 +1048,6 @@ export default function ReaderPage() {
                                 </div>
                             </div>
 
-                            {/* 4. Theme & Lighting Selector */}
                             <div className="space-y-2 pt-3 border-t" style={{ borderColor: activeTheme.borderColor }}>
                                 <label className="text-xs font-bold uppercase tracking-wider opacity-70 flex items-center gap-1.5">
                                     <Palette className="w-3.5 h-3.5 opacity-70" />
@@ -1047,14 +1085,14 @@ export default function ReaderPage() {
                 </div>
             )}
 
-            {/* Reader Canvas */}
-            <div className="max-w-8xl mx-auto px-4 py-2">
-                {/* Highlighted Pages Section - Compact Glassmorphism Badge */}
-                {highlightedPages.length > 0 && (
-                    <div className="flex justify-end mb-3">
-                        <div className="px-3.5 py-1.5 rounded-2xl bg-white/20 dark:bg-slate-900/40 backdrop-blur-xl border border-white/35 dark:border-white/15 shadow-lg flex items-center gap-2.5 transition-all hover:bg-white/25 dark:hover:bg-slate-900/50">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase opacity-90">
-                                <Bookmark className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+            {/* Main Reader Canvas */}
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+                {/* Highlighted Pages Section - Glass Badge */}
+                {highlightedPages.length > 0 && !isZenMode && (
+                    <div className="flex justify-end mb-4">
+                        <div className="px-4 py-2 rounded-2xl bg-white/20 dark:bg-slate-900/40 backdrop-blur-xl border border-white/30 dark:border-white/10 shadow-lg flex items-center gap-3 transition-all">
+                            <div className="flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase opacity-90">
+                                <Bookmark className="w-4 h-4 text-amber-400 fill-amber-400 flex-shrink-0" />
                                 <span className="hidden xs:inline">Highlights:</span>
                             </div>
                             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-xs sm:max-w-md no-scrollbar">
@@ -1062,12 +1100,12 @@ export default function ReaderPage() {
                                     <button
                                         key={`hl-page-${pageNum}`}
                                         onClick={() => setPageNumber(pageNum)}
-                                        className={`px-2.5 py-0.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 flex-shrink-0 ${pageNum === pageNumber
-                                            ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/60 scale-105 font-extrabold'
-                                            : 'bg-white/20 hover:bg-white/35 border border-white/25 backdrop-blur-sm'
+                                        className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1 flex-shrink-0 ${pageNum === pageNumber
+                                            ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300/60 scale-105'
+                                            : 'bg-white/20 hover:bg-white/35 border border-white/20 backdrop-blur-sm'
                                             }`}
                                     >
-                                        <Sparkles className="w-3 h-3 text-amber-300" /> {pageNum}
+                                        <Sparkles className="w-3.5 h-3.5 text-amber-300" /> {pageNum}
                                     </button>
                                 ))}
                             </div>
@@ -1076,18 +1114,18 @@ export default function ReaderPage() {
                 )}
 
                 {pageLoading ? (
-                    <div className="flex justify-center h-64 items-center">
-                        <div className="animate-pulse flex items-center gap-3 font-medium opacity-80">
-                            <BookOpen className="w-5 h-5 animate-bounce" /> Loading page {pageNumber}...
+                    <div className="flex justify-center h-72 items-center">
+                        <div className="animate-pulse flex items-center gap-3 font-semibold text-lg opacity-85">
+                            <BookOpen className="w-6 h-6 animate-bounce text-amber-500" /> Loading page {pageNumber}...
                         </div>
                     </div>
                 ) : pageError ? (
-                    <div className="text-center py-20 rounded-2xl p-8 border shadow-sm" style={{ borderColor: activeTheme.borderColor }}>
-                        <h2 className="text-2xl font-semibold mb-2">Page Not Found</h2>
-                        <p className="opacity-70 text-sm">Page {pageNumber} is not available in this book yet.</p>
+                    <div className="text-center py-20 rounded-3xl p-8 border shadow-sm max-w-xl mx-auto" style={{ borderColor: activeTheme.borderColor }}>
+                        <h2 className="text-2xl font-bold mb-2">Page Not Available</h2>
+                        <p className="opacity-75 text-sm mb-6">Page {pageNumber} has not been added to this book yet.</p>
                         <button
                             onClick={() => setPageNumber(1)}
-                            className="mt-6 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition"
+                            className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition shadow-md"
                         >
                             Return to Page 1
                         </button>
@@ -1104,51 +1142,61 @@ export default function ReaderPage() {
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}
                     >
-                        <div className="w-full flex justify-center m-0 p-0">
-                            <Image src={SIX_POINTED_STAR.src} alt="six pointed star" height={100} width={100} className="w-25 h-25 sm:w-32 sm:h-32 opacity-100" />
+                        <div className="w-full flex justify-center m-0 p-0 mb-4 opacity-90">
+                            <Image src={SIX_POINTED_STAR.src} alt="six pointed star" height={100} width={100} className="w-20 h-20 sm:w-28 sm:h-28" />
                         </div>
                         <article
-                            className="leading-relaxed font-serif tracking-wide transition-all duration-300 prose max-w-none min-h-[380px]"
+                            className="leading-loose font-serif tracking-wide transition-all duration-300 prose max-w-none min-h-[400px] select-text"
                             style={{ fontSize: `${fontSize}px`, color: activeTheme.textColor }}
                             onClick={handleArticleClick}
                             dangerouslySetInnerHTML={{ __html: processedHtml }}
                         />
                     </BookFrame>
                 )}
+            </div>
 
-                {/* Premium Smart & Compact Multi-Stop Gradient Bottom Pagination Bar */}
+            {/* Theme-Adaptive Floating Bottom Dock */}
+            {!isZenMode && (
                 <div
-                    className="mt-12 sm:mt-16 p-2 sm:p-3.5 rounded-3xl shadow-2xl flex flex-row items-center justify-between gap-2 sm:gap-6 border border-white/25 text-white backdrop-blur-xl transition-all duration-300 max-w-4xl mx-auto"
+                    className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 px-3 sm:px-5 py-2 sm:py-2.5 rounded-full shadow-2xl flex items-center justify-between gap-2 sm:gap-4 border backdrop-blur-2xl transition-all duration-300 max-w-xl w-[94%] sm:w-auto"
                     style={{
-                        background: 'linear-gradient(90deg, #a47451 0.000%, #9c9881 16.667%, #73a09d 33.333%, #3b899a 50.000%, #095b79 66.667%, #002847 83.333%, #000116 100.000%)',
+                        backgroundColor: activeTheme.isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+                        borderColor: activeTheme.borderColor,
+                        color: activeTheme.textColor,
+                        boxShadow: activeTheme.isDark
+                            ? '0 20px 40px -10px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1)'
+                            : '0 20px 40px -10px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)'
                     }}
                 >
                     <button
                         disabled={pageNumber <= 1 || pageLoading}
                         onClick={() => setPageNumber(p => p - 1)}
-                        className="h-10 px-3 sm:px-5 rounded-2xl border border-white/30 font-semibold transition-all flex items-center justify-center gap-1.5 sm:gap-2 disabled:opacity-30 disabled:cursor-not-allowed bg-white/10 hover:bg-white/25 active:scale-95 text-white backdrop-blur-md shadow-md flex-shrink-0 text-xs sm:text-sm"
-                        title="Previous Page"
+                        className="px-3.5 py-1.5 rounded-full font-semibold transition-all flex items-center gap-1.5 text-xs sm:text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-current/10 active:scale-95 flex-shrink-0"
+                        title="Previous Page (Key: ←)"
                     >
                         <ChevronLeft className="w-4 h-4" />
-                        <span className="hidden sm:inline">Previous</span>
+                        <span className="hidden xs:inline">Prev</span>
                     </button>
 
-                    {/* Numeric Page List */}
-                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center overflow-x-auto max-w-[65vw] sm:max-w-none py-1 no-scrollbar">
-                        {renderPageNumbers()}
+                    <div className="flex items-center gap-2 flex-1 justify-center">
+                        <div className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-current/5 border border-current/10 text-xs font-bold select-none">
+                            <span>Page {pageNumber} of {totalPages}</span>
+                            <span className="w-1 h-1 rounded-full bg-current opacity-40" />
+                            <span className="text-amber-500 font-extrabold">{Math.round((pageNumber / Math.max(1, totalPages)) * 100)}%</span>
+                        </div>
                     </div>
 
                     <button
                         disabled={pageNumber >= totalPages || pageLoading}
                         onClick={() => setPageNumber(p => p + 1)}
-                        className="h-10 px-3 sm:px-5 rounded-2xl border border-white/30 font-semibold transition-all flex items-center justify-center gap-1.5 sm:gap-2 disabled:opacity-30 disabled:cursor-not-allowed bg-white/10 hover:bg-white/25 active:scale-95 text-white backdrop-blur-md shadow-md flex-shrink-0 text-xs sm:text-sm"
-                        title="Next Page"
+                        className="px-3.5 py-1.5 rounded-full font-semibold transition-all flex items-center gap-1.5 text-xs sm:text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-current/10 active:scale-95 flex-shrink-0"
+                        title="Next Page (Key: →)"
                     >
-                        <span className="hidden sm:inline">Next</span>
+                        <span className="hidden xs:inline">Next</span>
                         <ChevronRight className="w-4 h-4" />
                     </button>
                 </div>
-            </div>
+            )}
         </div>
     );
 }
